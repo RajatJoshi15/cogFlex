@@ -1,0 +1,358 @@
+% Define your screen parameters
+sca     % closes all screens
+clear 
+cd '/media/rajat/Rasendisk/lab/matlabScrips/cogFlex/Functions'
+input("start>>>     ", 's');
+answer = inputdlg({'ID:', 'Session:'}, 'Subject_ID', [1, 35; 1, 35], {'', ''});
+try
+    %% Setting up trials
+    % Variables
+    totalTrials     = 20;
+    oddChoose       = [1 3 7 9];
+    evenChoose      = [2 4 6 8];
+    oddChooseTest   = ['1' '3' '7' '9'];
+    evenChooseTest  = ['2' '4' '6' '8'];
+    vowelChoose     = ['A', 'E', 'I', 'U'];
+    consonantChoose = ['G', 'H', 'R', 'K'];
+   
+    %% Trial Randomization and sequencing
+    non_targetTrials    = zeros(1,length(totalTrials));
+    target_Trials       = zeros(1,length(totalTrials));
+    for i = 1:2
+        % input arrayss
+        vowelTrial      = genSeq(vowelChoose, totalTrials/2);
+        consonantTrial  = genSeq(consonantChoose, totalTrials/2);
+        oddTtrial       = genSeq(oddChoose, totalTrials/2);
+        evenTrial       = genSeq(evenChoose, totalTrials/2);
+        
+        numTrials       = [oddTtrial evenTrial];
+        letterTrials    = [vowelTrial consonantTrial];
+        % Trials
+        numTrials       = numTrials(randperm(numel(numTrials)));
+        letterTrials    = letterTrials(randperm(numel(letterTrials)));
+        trials          = vertcat(letterTrials, numTrials)';
+        trials          = strcat(trials(:,1), trials(:,2));
+        
+        % swaping position of letter and numbers for half of the trials
+        for ii = 1:length(trials)/2
+            pos1            = trials{ii}(1);
+            pos2            = trials{ii}(2);
+            
+            trials{ii}(1)   = pos2;
+            trials{ii}(2)   = pos1;
+        end
+        
+        trials              = trials(randperm(numel((trials))));
+        for jj = 2:length(trials)    
+            while strcmp(trials{jj}, trials{jj-1})
+                trials = trials(randperm(numel((trials))));
+            end
+        end
+        
+        if i == 1
+            target_Trials = trials;
+        else
+            non_targetTrials = trials;
+        end
+        
+    end
+    
+
+    % trial rule: Target position
+    taskRule   = generateRandomArray([1 2], totalTrials);
+    % non-task rule
+    nonTaskRule = zeros(1,length(taskRule));
+    for i = 1:length(taskRule)
+        if taskRule(i) == 1
+            nonTaskRule(i)    = 2;
+        else 
+            nonTaskRule(i)  = 1;
+        end
+    end
+
+    %% Call defaults
+    PsychDefaultSetup(1) % executes the AssertOpenGL cmd and KbName('UnifyKeyNames')
+    % Screen('Preference', 'SkipSyncTests', 1); % Comment during the main experiment
+    % IF 0 Do not skip the sync test, 1 & 2 skip the test (different settings)
+
+    % Setup Screens
+    screens = Screen('Screens');
+    numberOfScreens = max(screens); % Gets the screen number, typically, 0 = primary; 1 = external screen
+    chosenScreen = numberOfScreens; % Choose which screen to display on (here, external screen is selected)
+    rect = []; % Full screen
+
+    % Get the luminiscence value
+    white = WhiteIndex(chosenScreen); % 255
+    black = BlackIndex(chosenScreen); % 0
+    grey =  white/2;
+
+    % Open PTB
+    [w, scr_rect] = PsychImaging('OpenWindow', chosenScreen, black, rect); % scr_rect gives the size of the screen
+    % Priority(MaxPriority(w));
+    % Priority(0);
+    [centerX, centerY] = RectCenter(scr_rect); % get coordinates of the center of the screen
+    HideCursor(w);
+
+    % Get flip and refresh rates
+    ifi = Screen('GetFlipInterval', w); % interframe Interval
+    hertz = FrameRate(w);
+   
+    %% Define response options
+    leftKey     = KbName('g'); % key-g
+    rightKey    = KbName('h'); % key-h
+    escapeKey   = KbName('ESCAPE');
+    startKey    = KbName('LeftShift');
+    endKey      = KbName('RightShift');
+    while KbCheck; end % Slow for the first time, therefore called here
+    
+    %% Draw
+    % Define crosshair parameters
+    crossLength     = 7;
+    crossWidth      = 2;
+    crossColor      = white*3/4;
+
+    FlushEvents; % if any key is pressed before this event it clears all
+    stimPosition    = [25 -83];
+    waitFrames      = 1;
+    numFrames       = round(waitFrames / ifi);
+    numFrames       = round(waitFrames / ifi); 
+    
+    %% Table 
+    % Define column names
+    columnNames = {'Trial No', 'Trial rule','Target Stimulus', 'Non-Target stimulus', 'Stimulus name' ...
+        'Stimulus onset', 'Key pressed','Response time', 'Answer', 'Reaction time'};
+    
+    % Instructions 
+    % Define instructions
+    instructions = {
+        'Number-Letter Switching Task'
+        ''
+        'Welcome!'
+        ''
+        ''
+        'Task Overview:'
+        ''
+        'You''ll see two letter-number pairs (e.g. 1E, V9). The brighter pair is the TARGET'
+        ''
+        'You need to report about the letter / number in the target'
+        'Position of the target relative to ''+'' determines whether to report letter / number.'
+        ''
+        'Task Rules:'
+        ''
+        'When target is above the ''+'' report ODD / EVEN'
+        ''
+        'When target is below the ''+'' report CONSONANT / VOWEL'
+        ''
+        ''
+        'To Respose'
+        ''
+        '- Use ''G'' for ODD / CONSONANT, ''H'' for EVEN / VOWEL'
+        ''
+        ''
+        '- Focus on the crosshair.'
+        '- Respond quickly and accurately.'
+        ''
+        ''
+        'Ready?'
+        ''
+        'Press "Left-shift" key to start.'
+    };
+
+    % Convert cell array to a single string with newline characters
+    instructionsText = sprintf('%s\n', instructions{:});
+        %% Looping
+    % Preallocate arrays to store timing information
+    stimulusOnsetTime       = [];
+    responseTime            = [];
+    stimulusName            = [];
+    keyPressed              = [];
+    reactionTime            = [];
+    RESPONSE                = [];
+    rule                    = [];
+    trialNo                 = [];
+    targett_trial           = [];
+    non_targett_trial       = [];
+    motorSwitch             = [];
+    targetType              = [];
+
+    vbl = Screen('Flip', w); % baseline sync
+    % RESPONSE = zeros(1,totalTrials);
+    while true
+        % Instructions
+        Screen('TextSize', w, 30); % set text size to the fixation length
+        Screen('TextFont', w, 'Arial');
+        DrawFormattedText(w, instructionsText, 'center', 'center', white); 
+        vbl = Screen('Flip', w, vbl+(waitFrames-0.5)*ifi);
+        [keyIsDown, secs, keyCode] = KbCheck;
+        if keyIsDown          
+            if keyCode(startKey)
+                responseTime(end+1)         = secs;
+                stimulusName{end+1}         = "Instructions";
+                stimulusOnsetTime(end+1)    = vbl;
+                keyPressed{end+1}           = KbName(find(keyCode));
+                RESPONSE{end+1}             = 'START';
+                rule(end+1)                 = 0;
+                trialNo(end+1)              = 0;
+                reactionTime(end+1)         = 0;
+                targett_trial{end+1}        = '-';
+                non_targett_trial{end+1}    = '-';
+                motorSwitch(end+1)          = 0;
+                targetType{end+1}           = '-';
+            end
+        end
+     
+        if keyCode(escapeKey)
+            break
+        elseif keyCode(startKey)
+            % cross-hair for 1 sec
+            for iTime = 1:numFrames
+                Screen('DrawLines', w, [-crossLength, crossLength, 0, 0; 0, 0, -crossLength, crossLength],...
+                    crossWidth, crossColor, [centerX, centerY]);
+                if iTime == 1
+                vbl = Screen('Flip', w, vbl+(waitFrames-0.5)*ifi);
+                end
+    
+            end
+            % stimulusName{end+1} = "+";
+            % stimulusOnsetTime(end+1) = vbl;
+            % responseTime(end+1) = secs;
+            % Looping through trials
+            
+            for iTrial = 1: totalTrials % loop through the total trials
+                WaitSecs(0.2);
+                trialRule                   = taskRule(iTrial);
+                nonTrialRule                = nonTaskRule(iTrial);
+                targetTrial                 = target_Trials{iTrial};
+                nonTargetTrial              = non_targetTrials{iTrial};
+                targett_trial{end+1}        = target_Trials{iTrial};
+                non_targett_trial{end+1}    = non_targetTrials{iTrial};
+                Screen('DrawLines', w, [-crossLength, crossLength, 0, 0; 0, 0, -crossLength, crossLength],...
+                crossWidth, crossColor, [centerX, centerY]);
+                % target
+                Screen('TextSize', w, 80); % set text size to the fixation length
+                Screen('TextFont', w, 'Noto Sans Mono');
+                DrawFormattedText(w, targetTrial, 'center', centerY-stimPosition(trialRule), white); 
+                % non-target
+                Screen('TextSize', w, 80); % set text size to the fixation length
+                Screen('TextFont', w, 'Noto Sans Mono');
+                DrawFormattedText(w, nonTargetTrial, 'center', centerY-stimPosition(nonTrialRule), grey);
+                vbl = Screen('Flip', w, vbl+(waitFrames-0.5)*ifi);
+                % [keyIsDown, secs, keyCode] = KbCheck;
+                stimulusName{end+1} = strcat(targetTrial, "_",nonTargetTrial);
+                stimulusOnsetTime(end+1) = vbl;
+                rule(end+1)                 = taskRule(iTrial);
+                trialNo(end+1)              = iTrial;
+            
+                % exit 
+                if keyCode(escapeKey)
+                    response = true;
+                    break;
+                end
+                response = false;
+                while ~response
+                    [keyIsDown, secs, keyCode] = KbCheck;
+                    % responseTime(end+1) = secs;
+                    if keyIsDown
+                        vbl = Screen('Flip', w, vbl+(waitFrames-0.5)*ifi);
+                        keyPressed{end+1}       = KbName(find(keyCode));
+                        responseTime(end+1)     = vbl;
+                        if keyCode(escapeKey)
+                            response = true;
+                            break; % Exit loop if escape key is pressed
+                        
+                        elseif keyCode(leftKey) 
+                            %  responseFrames(iTrial) = Screen('Flip', w); % Log response time
+                            response = true;
+                            if trialRule == 1 
+                                targetType{end+1} = 'Odd';
+                                if any(ismember(targetTrial, oddChooseTest))
+                                    RESPONSE(end+1) = {'Correct'};
+                                    
+
+                                else
+                                    RESPONSE(end+1) = {'Incorrect'};
+                                    
+                                end
+                            elseif trialRule == 2
+                                targetType{end+1} = 'Consonant';
+                                if any(ismember(targetTrial, consonantChoose))
+                                    RESPONSE(end+1) = {'Correct'};
+                                else
+                                    RESPONSE(end+1) = {'Incorrect'};
+                                end
+                            end
+                        
+                        elseif keyCode(rightKey)
+                            % responseFrames(iTrial) = Screen('Flip', w); % Log response time
+                            response = true;
+                            if trialRule == 1 
+                                targetType{end+1} = 'Even';
+                                if any(ismember(targetTrial, evenChooseTest))
+                                    RESPONSE(end+1) = {'Correct'};
+                                    
+                                else
+                                    RESPONSE(end+1) = {'Incorrect'};
+                                    
+                                end
+                            elseif trialRule == 2
+                                targetType{end+1} = 'Vowel';
+                                if any(ismember(targetTrial, vowelChoose))
+                                    RESPONSE(end+1) = {'Correct'};
+                                else
+                                    RESPONSE(end+1) = {'Incorrect'};
+                                end
+                            end
+                        end
+                    end
+                end
+                % Creating table variables
+                if iTrial == 1
+                        motorSwitch(end+1)  = 0;
+                    elseif ~strcmp(keyPressed{end}, keyPressed{end-1})
+                        motorSwitch(end+1)  = 1;
+                    else
+                        motorSwitch(end+1)  = 0;
+                end
+                reactionTime(end+1)     = responseTime(end) - stimulusOnsetTime(end);
+                                      
+            end
+            Screen('TextSize', w, 100);
+            DrawFormattedText(w, 'Thank you', 'center', 'center', white);
+            Screen('Flip', w); % baseline syncing
+            KbWait([], 2);
+            break
+        end
+
+    end
+
+    data = table();
+    columnNames = {'TrialNo', 'TrialRule', 'TargetStimulus', 'NonTargetStimulus', 'StimulusName', 'TagetType'...
+        'StimulusOnset', 'KeyPressed', 'ResponseTime', 'MotorSwitch', 'Answer', 'ReactionTime'};
+    variableName = {trialNo', rule', targett_trial',  non_targett_trial', stimulusName', targetType', stimulusOnsetTime', ...
+        keyPressed', responseTime', motorSwitch', RESPONSE', reactionTime'};
+    
+    for ii = 1:length(columnNames)
+        field = columnNames{ii};
+        data.(field) = variableName{ii};
+    end
+    data2 = table2struct(data);
+    
+    sca;
+
+    % saving files
+    cd '/media/rajat/Rasendisk/lab/PhD/cogFlex/pilotBehavior/'
+    fileName    = strcat('cogFlex_', answer{1}, '_0', answer{2});
+    fileName2    = strcat('cogFlex_', answer{1}, '_0', answer{2}, '.mat');
+    mkdir(answer{1})
+    cd(answer{1})
+
+    writetable(data, fileName)
+    save(fileName2, 'data2')
+
+ 
+
+catch
+    sca; % close all screens
+    ShowCursor; % shows the mouse cursor
+    psychrethrow(psychlasterror); % prints the last error message to the cmd window
+end
