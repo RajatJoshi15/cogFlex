@@ -41,5 +41,4 @@ function result = genSeq(setArray, numTrials)
             end
         end
     end
-    result
 end
